@@ -1,0 +1,65 @@
+# Ignore build outputs
+build/
+build/**
+cmake_build/
+CMakeFiles/
+CMakeCache.txt
+Makefile
+compile_commands.json
+
+# SDK config and generated config artifacts
+sdkconfig
+sdkconfig.*
+sdkconfig.cmake
+config.env
+
+# Partition table and bootloader build artifacts
+partition_table/
+bootloader/
+bootloader/build/
+
+# ESP-IDF/flashing generated files
+flasher_args.json
+flasher_args.json.in
+flash_args
+flash_args.in
+flash_app_args
+flash_app_args.in
+bootloader-flash_args
+app-flash_args
+flash_bootloader_args
+flash_project_args
+partition-table-flash_args
+project_description.json
+
+# Toolchain and tmp
+toolchain/
+tmp/
+
+# IDE/editor directories
+.vscode/
+.idea/
+*.iml
+
+# macOS
+.DS_Store
+
+# Python virtualenvs
+.venv/
+venv/
+env/
+
+# Logs
+log/
+
+# Binary and build artefacts
+*.elf
+*.bin
+*.map
+*.hex
+*.dfu
+*.uf2
+
+# Private keys, certs
+*.pem
+*.key
