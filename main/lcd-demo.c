@@ -59,7 +59,7 @@ void lcd_test(void *pvParameters)
     hd44780_upload_character(&lcd, 1, char_data + 8);
 
     hd44780_gotoxy(&lcd, 0, 0);
-    hd44780_puts(&lcd, "\x08 Hello world!");
+    hd44780_puts(&lcd, "\x08 Ahoj Drobku!");
     hd44780_gotoxy(&lcd, 0, 1);
     hd44780_puts(&lcd, "\x09 ");
 
