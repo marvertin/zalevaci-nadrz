@@ -14,6 +14,7 @@
 #include "blikaniled.h"
 #include "lcd-demo.h"
 #include "prutokomer-demo.h"
+#include "teplota-demo.h"
 
 
 void app_main(void)
@@ -24,4 +25,5 @@ void app_main(void)
     // vytvoření dvou paralelních tasků
     blikaniled_init();
     lcd_demo_init();
+    teplota_demo_init();
 }

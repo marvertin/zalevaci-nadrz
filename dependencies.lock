@@ -57,6 +57,28 @@ dependencies:
     - esp32s2
     - esp32s3
     version: 2.1.1
+  esp-idf-lib/onewire:
+    component_hash: d98263e9ab1206caf9bd255652cfd1e7d43524de58a32bc17afe43a425c1674e
+    dependencies:
+    - name: esp-idf-lib/esp_idf_lib_helpers
+      registry_url: https://components.espressif.com
+      require: private
+      version: '*'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    targets:
+    - esp32
+    - esp32c2
+    - esp32c3
+    - esp32c5
+    - esp32c6
+    - esp32c61
+    - esp32h2
+    - esp32p4
+    - esp32s2
+    - esp32s3
+    version: 1.1.0
   esp-idf-lib/pcf8574:
     component_hash: 59283ee5b234c85c3e217c45c4d2bebe6d55b2371d8a85c97d5faefe3943e82f
     dependencies:
@@ -99,9 +121,10 @@ dependencies:
     version: 6.1.0
 direct_dependencies:
 - esp-idf-lib/hd44780
+- esp-idf-lib/onewire
 - esp-idf-lib/pcf8574
 - heronet/tm1637
 - idf
-manifest_hash: a0bbed261d61c5986ca93b381fc90aceae72731020acbec33958a7f8e900ce84
+manifest_hash: a557c79dee185b6bb84f4275a85934ad50e7d3e9dbd9f661af6ba1b873fcae62
 target: esp32
 version: 2.0.0
