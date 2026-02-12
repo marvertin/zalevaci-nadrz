@@ -115,6 +115,15 @@ static void level_task(void *pvParameters)
         return;
     }
     
+    // Nabití bufferu na začátku - přečteme tolik měření, jaká je velikost bufferu
+    // aby se zabránilo zkresleným údajům na začátku
+    size_t buffer_size = level_filter.getBufferSize();
+    ESP_LOGI(TAG, "Prebíhá nabití bufferu (%zu měření)...", buffer_size);
+    for (size_t i = 0; i < buffer_size; i++) {
+        adc_read_average();  // Jen vkládáme bez publikování
+    }
+    ESP_LOGI(TAG, "Buffer nabití, začínáme publikovat výsledky");
+    
     uint32_t raw_value;
     float height;
     
@@ -135,7 +144,7 @@ static void level_task(void *pvParameters)
         lcd_print(0, 1, buf, true, 0); // Zobraz na druhý řádek, první sloupec
         
         // Čtení každou sekundu
-        vTaskDelay(pdMS_TO_TICKS(100));
+        vTaskDelay(pdMS_TO_TICKS(10));
     }
 }
 

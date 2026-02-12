@@ -33,9 +33,6 @@ static void lcd_task(void *pvParameters)
 
     while (1) {
         if (xQueueReceive(lcd_queue, &msg, portMAX_DELAY) == pdTRUE) {
-
-            // Zalogujeme zprávu pro debug
-            ESP_LOGI(TAG, "Zobrazit na LCD: [%u,%u] '%s' clear_line=%s", msg.x, msg.y, msg.text, msg.clear_line ? "true" : "false");
             hd44780_gotoxy(&lcd, msg.x, msg.y);
             hd44780_puts(&lcd, msg.text);
         }

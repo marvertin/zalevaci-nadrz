@@ -120,17 +120,13 @@ public:
     }
 
     /**
-     * Resetuje buffer na výchozí stav
+     * Vrátí velikost bufferu
+     * 
+     * @return velikost bufferu
      */
-    void reset()
+    size_t getBufferSize() const
     {
-        current_order = 0;
-        for (size_t i = 0; i < BufferSize + 2; ++i)
-        {
-            buffer[i].order = (int)i - 1;
-            buffer[i].value = 0;
-        }
-        buffer[0].value = 0;
-        buffer[BufferSize + 1].value = UINT32_MAX;
+        return BufferSize;
     }
+
 };
