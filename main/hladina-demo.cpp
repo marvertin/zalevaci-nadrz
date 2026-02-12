@@ -139,8 +139,8 @@ static void level_task(void *pvParameters)
         //ESP_LOGI(TAG, "Surová hodnota: %lu | Výška hladiny: %.3f m", raw_value, height);
         
         // Zobrazení na LCD
-        char buf[12];
-        snprintf(buf, sizeof(buf), "H: %3f cm", height * 100.0f); // Zobrazíme v centimetrech pro lepší čitelnost
+        char buf[20];
+        snprintf(buf, sizeof(buf), "H:%3.0fcm", height * 100.0f);
         lcd_print(0, 1, buf, true, 0); // Zobraz na druhý řádek, první sloupec
         
         // Čtení každou sekundu
