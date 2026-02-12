@@ -25,7 +25,7 @@ static const adc_unit_t LEVEL_ADC_UNIT = ADC_UNIT_1;
 #define HEIGHT_MAX 2.0f      // Výška v metrech pro maximální napětí
 
 // Počet vzorků pro průměrování
-#define ADC_SAMPLES 10
+#define ADC_SAMPLES 100
 
 static adc_oneshot_unit_handle_t adc_handle = NULL;
 
