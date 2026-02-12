@@ -30,10 +30,10 @@ static const adc_unit_t LEVEL_ADC_UNIT = ADC_UNIT_1;
 // Tlakový senzor: 0-2m vody = 0-0.2 bar
 // Výstupní napětí: obvykle 0.5-4.5V (některé mají 0-3.3V)
 // Kalibrace: Ajustujte tyto hodnoty podle vašeho konkrétního senzoru
-#define ADC_RAW_MIN 520        // RAW hodnota pro 0m
-#define ADC_RAW_MAX 4095     // RAW hodnota pro 2m
+#define ADC_RAW_MIN 540     // RAW hodnota pro 0m
+#define ADC_RAW_MAX 950     // RAW hodnota pro 2m
 #define HEIGHT_MIN 0.0f      // Výška v metrech pro minimální napětí
-#define HEIGHT_MAX 2.0f      // Výška v metrech pro maximální napětí
+#define HEIGHT_MAX 0.290f      // Výška v metrech pro maximální napětí
 
 static adc_oneshot_unit_handle_t adc_handle = NULL;
 
@@ -94,12 +94,12 @@ static uint32_t adc_read_average(void)
 static float adc_raw_to_height(uint32_t raw_value)
 {
     // Lineární interpolace
-    float height = HEIGHT_MIN + (float)(raw_value - ADC_RAW_MIN) * 
+    float height = HEIGHT_MIN + (float)((int)raw_value - ADC_RAW_MIN) * 
                    (HEIGHT_MAX - HEIGHT_MIN) / (float)(ADC_RAW_MAX - ADC_RAW_MIN);
     
     // Omezení na rozsah
-    if (height < HEIGHT_MIN) height = HEIGHT_MIN;
-    if (height > HEIGHT_MAX) height = HEIGHT_MAX;
+    //if (height < HEIGHT_MIN) height = HEIGHT_MIN;
+    //if (height > HEIGHT_MAX) height = HEIGHT_MAX;
     
     return height;
 }
@@ -136,15 +136,15 @@ static void level_task(void *pvParameters)
         height = adc_raw_to_height(raw_value);
         
         // Výstup do logu
-        ESP_LOGI(TAG, "Surová hodnota: %lu | Výška hladiny: %.3f m", raw_value, height);
+        //ESP_LOGI(TAG, "Surová hodnota: %lu | Výška hladiny: %.3f m", raw_value, height);
         
         // Zobrazení na LCD
         char buf[12];
-        snprintf(buf, sizeof(buf), "H:%.2fm", height);
+        snprintf(buf, sizeof(buf), "H: %3f cm", height * 100.0f); // Zobrazíme v centimetrech pro lepší čitelnost
         lcd_print(0, 1, buf, true, 0); // Zobraz na druhý řádek, první sloupec
         
         // Čtení každou sekundu
-        vTaskDelay(pdMS_TO_TICKS(10));
+        vTaskDelay(pdMS_TO_TICKS(20));
     }
 }
 

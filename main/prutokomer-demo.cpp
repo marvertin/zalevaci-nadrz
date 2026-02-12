@@ -41,7 +41,7 @@ static void pocitani_pulsu(void *pvParameters)
         vTaskDelay(pdMS_TO_TICKS(200));   // měřím 1× za sekundu
 
         // zobraz pulzy/seknu (zatím žádný přepočet na L/min)
-        snprintf(buf, sizeof(buf), "%lu", (unsigned long)pulse_count);
+        snprintf(buf, sizeof(buf), "Q: %lu", (unsigned long)pulse_count);
         lcd_print(0, 0, buf, true, 0); // Zobraz na první řádek, první sloupec
 
         // zobraz pulzy/seknu (zatím žádný přepočet na L/min)
