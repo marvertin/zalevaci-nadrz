@@ -12,6 +12,7 @@
 
 #include "esp_http_server.h"
 #include "esp_log.h"
+#include "esp_system.h"
 #include "nvs.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -460,9 +461,30 @@ static esp_err_t config_save_handler(httpd_req_t *req)
         return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Ulozeni konfigurace selhalo");
     }
 
-    httpd_resp_set_status(req, "303 See Other");
-    httpd_resp_set_hdr(req, "Location", "/config");
-    return httpd_resp_send(req, "", HTTPD_RESP_USE_STRLEN);
+    auto restart_task = [](void *arg) {
+        vTaskDelay(pdMS_TO_TICKS(250));
+        ESP_LOGI(TAG, "Restartuji zarizeni po ulozeni konfigurace");
+        esp_restart();
+        vTaskDelete(nullptr);
+    };
+
+    xTaskCreate(restart_task, "cfg_restart", 2048, nullptr, 5, nullptr);
+
+    const char *html =
+        "<!doctype html><html><head>"
+        "<meta charset='utf-8'>"
+        "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+        "<title>Uloženo</title>"
+        "<style>body{font-family:sans-serif;max-width:640px;margin:24px auto;padding:0 12px;}</style>"
+        "</head><body>"
+        "<h1>Konfigurace uložena</h1>"
+        "<p>Zařízení se restartuje. Za chvíli proběhne nové načtení stránky konfigurace.</p>"
+        "<p>Pokud by se stránka neobnovila sama, otevřete znovu <a href='/config'>/config</a>.</p>"
+        "<script>setTimeout(function(){window.location.href='/config';},1200);</script>"
+        "</body></html>";
+
+    httpd_resp_set_type(req, "text/html; charset=utf-8");
+    return httpd_resp_send(req, html, HTTPD_RESP_USE_STRLEN);
 }
 
 esp_err_t config_webapp_start(const char *nvs_namespace,
