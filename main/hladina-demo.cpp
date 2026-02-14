@@ -14,6 +14,7 @@ extern "C" {
 
 #include "lcd.h"
 #include "trimmed_mean.hpp"
+#include "config_webapp.h"
 
 #define TAG "LEVEL_DEMO"
 
@@ -26,19 +27,109 @@ extern "C" {
 static const adc_channel_t LEVEL_ADC_CHANNEL = ADC_CHANNEL_6;
 static const adc_unit_t LEVEL_ADC_UNIT = ADC_UNIT_1;
 
-// Kalibrace senzoru
-// Tlakový senzor: 0-2m vody = 0-0.2 bar
-// Výstupní napětí: obvykle 0.5-4.5V (některé mají 0-3.3V)
-// Kalibrace: Ajustujte tyto hodnoty podle vašeho konkrétního senzoru
-#define ADC_RAW_MIN 540     // RAW hodnota pro 0m
-#define ADC_RAW_MAX 950     // RAW hodnota pro 2m
-#define HEIGHT_MIN 0.0f      // Výška v metrech pro minimální napětí
-#define HEIGHT_MAX 0.290f      // Výška v metrech pro maximální napětí
+static const config_item_t LEVEL_CONFIG_ITEMS[] = {
+    {
+        .key = "lvl_raw_min",
+        .label = "Hladina RAW min",
+        .description = "ADC RAW hodnota odpovidajici minimalni hladine.",
+        .type = CONFIG_VALUE_INT32,
+        .default_string = nullptr,
+        .default_int = 540,
+        .default_float = 0.0f,
+        .default_bool = false,
+        .max_string_len = 0,
+        .min_int = 0,
+        .max_int = 4095,
+        .min_float = 0.0f,
+        .max_float = 0.0f,
+    },
+    {
+        .key = "lvl_raw_max",
+        .label = "Hladina RAW max",
+        .description = "ADC RAW hodnota odpovidajici maximalni hladine.",
+        .type = CONFIG_VALUE_INT32,
+        .default_string = nullptr,
+        .default_int = 950,
+        .default_float = 0.0f,
+        .default_bool = false,
+        .max_string_len = 0,
+        .min_int = 1,
+        .max_int = 4095,
+        .min_float = 0.0f,
+        .max_float = 0.0f,
+    },
+    {
+        .key = "lvl_h_min",
+        .label = "Hladina vyska min [m]",
+        .description = "Vyska hladiny pro minimalni hodnotu senzoru.",
+        .type = CONFIG_VALUE_FLOAT,
+        .default_string = nullptr,
+        .default_int = 0,
+        .default_float = 0.0f,
+        .default_bool = false,
+        .max_string_len = 0,
+        .min_int = 0,
+        .max_int = 0,
+        .min_float = 0.0f,
+        .max_float = 5.0f,
+    },
+    {
+        .key = "lvl_h_max",
+        .label = "Hladina vyska max [m]",
+        .description = "Vyska hladiny pro maximalni hodnotu senzoru.",
+        .type = CONFIG_VALUE_FLOAT,
+        .default_string = nullptr,
+        .default_int = 0,
+        .default_float = 0.290f,
+        .default_bool = false,
+        .max_string_len = 0,
+        .min_int = 0,
+        .max_int = 0,
+        .min_float = 0.0f,
+        .max_float = 5.0f,
+    },
+};
+
+// Kalibrace senzoru se nacita z konfigurace (NVS)
+static int32_t g_adc_raw_min = 540;
+static int32_t g_adc_raw_max = 950;
+static float g_height_min = 0.0f;
+static float g_height_max = 0.290f;
 
 static adc_oneshot_unit_handle_t adc_handle = NULL;
 
 // Vytvoříme instanci filtrů pro měření hladiny (31 prvků, 5 oříznutých z obou stran)
 static TrimmedMean<31, 5> level_filter;
+
+static void load_level_calibration_config(void)
+{
+    int32_t raw_min = g_adc_raw_min;
+    int32_t raw_max = g_adc_raw_max;
+    float height_min = g_height_min;
+    float height_max = g_height_max;
+
+    if (config_webapp_get_i32("lvl_raw_min", &raw_min) == ESP_OK) {
+        g_adc_raw_min = raw_min;
+    }
+    if (config_webapp_get_i32("lvl_raw_max", &raw_max) == ESP_OK) {
+        g_adc_raw_max = raw_max;
+    }
+    if (config_webapp_get_float("lvl_h_min", &height_min) == ESP_OK) {
+        g_height_min = height_min;
+    }
+    if (config_webapp_get_float("lvl_h_max", &height_max) == ESP_OK) {
+        g_height_max = height_max;
+    }
+
+    if (g_adc_raw_max <= g_adc_raw_min) {
+        g_adc_raw_max = g_adc_raw_min + 1;
+    }
+    if (g_height_max < g_height_min) {
+        float temp = g_height_min;
+        g_height_min = g_height_max;
+        g_height_max = temp;
+    }
+}
 
 /**
  * Inicializuje ADC pro čtení senzoru hladiny
@@ -94,8 +185,8 @@ static uint32_t adc_read_average(void)
 static float adc_raw_to_height(uint32_t raw_value)
 {
     // Lineární interpolace
-    float height = HEIGHT_MIN + (float)((int)raw_value - ADC_RAW_MIN) * 
-                   (HEIGHT_MAX - HEIGHT_MIN) / (float)(ADC_RAW_MAX - ADC_RAW_MIN);
+    float height = g_height_min + (float)((int)raw_value - g_adc_raw_min) *
+                   (g_height_max - g_height_min) / (float)(g_adc_raw_max - g_adc_raw_min);
     
     // Omezení na rozsah
     //if (height < HEIGHT_MIN) height = HEIGHT_MIN;
@@ -107,6 +198,8 @@ static float adc_raw_to_height(uint32_t raw_value)
 static void level_task(void *pvParameters)
 {
     ESP_LOGI(TAG, "Spouštění demá čtení hladiny...");
+
+    load_level_calibration_config();
     
     // Inicializace ADC
     if (adc_init() != ESP_OK) {
@@ -129,6 +222,11 @@ static void level_task(void *pvParameters)
     
     while (1)
     {
+        static uint32_t cycle_counter = 0;
+        if ((cycle_counter++ % 100) == 0) {
+            load_level_calibration_config();
+        }
+
         // Čtení průměru z ADC
         raw_value = adc_read_average();
         
@@ -152,4 +250,13 @@ void hladina_demo_init(void)
 {
    
     xTaskCreate(level_task, TAG, configMINIMAL_STACK_SIZE * 6, NULL, 5, NULL);
+}
+
+config_group_t hladina_demo_get_config_group(void)
+{
+    config_group_t group = {
+        .items = LEVEL_CONFIG_ITEMS,
+        .item_count = sizeof(LEVEL_CONFIG_ITEMS) / sizeof(LEVEL_CONFIG_ITEMS[0]),
+    };
+    return group;
 }

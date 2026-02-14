@@ -30,9 +30,14 @@ typedef struct {
     float max_float;
 } config_item_t;
 
+typedef struct {
+    const config_item_t *items;
+    size_t item_count;
+} config_group_t;
+
 esp_err_t config_webapp_start(const char *nvs_namespace,
-                              const config_item_t *items,
-                              size_t item_count,
+                              const config_group_t *groups,
+                              size_t group_count,
                               uint16_t http_port);
 
 esp_err_t config_webapp_get_i32(const char *key, int32_t *value);
