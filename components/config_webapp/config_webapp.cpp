@@ -23,19 +23,8 @@
 
 static const char *TAG = "config_webapp";
 static std::vector<config_item_t> s_items_storage;
-
-static const char *SYS_NAMESPACE = "sys_meta";
-static const char *SYS_BOOT_COUNT_KEY = "boot_count";
-static const char *SYS_LAST_REASON_KEY = "last_reason";
-static const char *SYS_LAST_TIME_KEY = "last_time";
-
-typedef struct {
-    uint32_t boot_count;
-    esp_reset_reason_t last_reason;
-    int64_t last_restart_unix;
-} system_status_t;
-
-static system_status_t s_system_status = {
+static bool s_has_restart_info = false;
+static config_webapp_restart_info_t s_restart_info = {
     .boot_count = 0,
     .last_reason = ESP_RST_UNKNOWN,
     .last_restart_unix = 0,
@@ -134,45 +123,6 @@ static std::string format_unix_time(int64_t unix_time)
         return "neznamy";
     }
     return buffer;
-}
-
-static void update_restart_metadata(void)
-{
-    nvs_handle_t nvs_handle;
-    esp_err_t result = nvs_open(SYS_NAMESPACE, NVS_READWRITE, &nvs_handle);
-    if (result != ESP_OK) {
-        ESP_LOGE(TAG, "Nelze otevrit system namespace: %s", esp_err_to_name(result));
-        return;
-    }
-
-    uint32_t boot_count = 0;
-    result = nvs_get_u32(nvs_handle, SYS_BOOT_COUNT_KEY, &boot_count);
-    if (result != ESP_OK && result != ESP_ERR_NVS_NOT_FOUND) {
-        ESP_LOGW(TAG, "Nelze nacist boot_count: %s", esp_err_to_name(result));
-    }
-    boot_count++;
-
-    esp_reset_reason_t reason = esp_reset_reason();
-    int64_t now = static_cast<int64_t>(time(nullptr));
-    if (now < 1609459200) {
-        now = 0;
-    }
-
-    ESP_ERROR_CHECK(nvs_set_u32(nvs_handle, SYS_BOOT_COUNT_KEY, boot_count));
-    ESP_ERROR_CHECK(nvs_set_i32(nvs_handle, SYS_LAST_REASON_KEY, static_cast<int32_t>(reason)));
-    ESP_ERROR_CHECK(nvs_set_i64(nvs_handle, SYS_LAST_TIME_KEY, now));
-    ESP_ERROR_CHECK(nvs_commit(nvs_handle));
-    nvs_close(nvs_handle);
-
-    s_system_status.boot_count = boot_count;
-    s_system_status.last_reason = reason;
-    s_system_status.last_restart_unix = now;
-
-    ESP_LOGI(TAG,
-             "Restart metadata: count=%lu, reason=%s, time=%s",
-             static_cast<unsigned long>(s_system_status.boot_count),
-             reset_reason_to_str(s_system_status.last_reason),
-             format_unix_time(s_system_status.last_restart_unix).c_str());
 }
 
 static int hex_to_int(char ch)
@@ -463,11 +413,13 @@ static std::string build_root_page_html()
     html += "</style></head><body>";
     html += "<h1>Systémový přehled</h1>";
 
-    html += "<div class='card'><h2>Restarty</h2><ul>";
-    html += "<li>Počet restartů: <strong>" + std::to_string(s_system_status.boot_count) + "</strong></li>";
-    html += "<li>Důvod posledního restartu: <strong>" + std::string(reset_reason_to_str(s_system_status.last_reason)) + "</strong></li>";
-    html += "<li>Čas posledního restartu: <strong>" + format_unix_time(s_system_status.last_restart_unix) + "</strong></li>";
-    html += "</ul></div>";
+    if (s_has_restart_info) {
+        html += "<div class='card'><h2>Restarty</h2><ul>";
+        html += "<li>Počet restartů: <strong>" + std::to_string(s_restart_info.boot_count) + "</strong></li>";
+        html += "<li>Důvod posledního restartu: <strong>" + std::string(reset_reason_to_str(static_cast<esp_reset_reason_t>(s_restart_info.last_reason))) + "</strong></li>";
+        html += "<li>Čas posledního restartu: <strong>" + format_unix_time(s_restart_info.last_restart_unix) + "</strong></li>";
+        html += "</ul></div>";
+    }
 
     html += "<div class='card'><h2>Systémové informace</h2><ul>";
     html += "<li>Projekt: <strong>" + std::string(app_desc->project_name) + "</strong></li>";
@@ -643,7 +595,8 @@ static esp_err_t config_save_handler(httpd_req_t *req)
 esp_err_t config_webapp_start(const char *nvs_namespace,
                               const config_group_t *groups,
                               size_t group_count,
-                              uint16_t http_port)
+                              uint16_t http_port,
+                              const config_webapp_restart_info_t *restart_info)
 {
     if (nvs_namespace == nullptr || groups == nullptr || group_count == 0) {
         return ESP_ERR_INVALID_ARG;
@@ -697,12 +650,17 @@ esp_err_t config_webapp_start(const char *nvs_namespace,
     s_ctx.item_count = s_items_storage.size();
     strncpy(s_ctx.nvs_namespace, nvs_namespace, sizeof(s_ctx.nvs_namespace) - 1);
 
+    s_has_restart_info = (restart_info != nullptr);
+    if (s_has_restart_info) {
+        s_restart_info = *restart_info;
+    } else {
+        memset(&s_restart_info, 0, sizeof(s_restart_info));
+    }
+
     esp_err_t result = ensure_defaults_in_nvs();
     if (result != ESP_OK) {
         return result;
     }
-
-    update_restart_metadata();
 
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.server_port = http_port;

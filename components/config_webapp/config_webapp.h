@@ -35,10 +35,17 @@ typedef struct {
     size_t item_count;
 } config_group_t;
 
+typedef struct {
+    uint32_t boot_count;
+    int32_t last_reason;
+    int64_t last_restart_unix;
+} config_webapp_restart_info_t;
+
 esp_err_t config_webapp_start(const char *nvs_namespace,
                               const config_group_t *groups,
                               size_t group_count,
-                              uint16_t http_port);
+                              uint16_t http_port,
+                              const config_webapp_restart_info_t *restart_info);
 
 esp_err_t config_webapp_get_i32(const char *key, int32_t *value);
 esp_err_t config_webapp_get_float(const char *key, float *value);
