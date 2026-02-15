@@ -152,9 +152,27 @@ esp_err_t FlashMonotonicCounter::increment(uint32_t steps)
     return ESP_OK;
 }
 
+esp_err_t FlashMonotonicCounter::reset()
+{
+    if (!initialized_) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    const int64_t current_value = signed_value_();
+    base_value_ = -current_value;
+
+    return save_rollover_state_to_nvs_(base_value_, false);
+}
+
 uint64_t FlashMonotonicCounter::value() const
 {
-    return base_value_ + used_bits_;
+    const int64_t current = signed_value_();
+    return current <= 0 ? 0 : static_cast<uint64_t>(current);
+}
+
+int64_t FlashMonotonicCounter::signed_value_() const
+{
+    return base_value_ + static_cast<int64_t>(used_bits_);
 }
 
 esp_err_t FlashMonotonicCounter::load_base_from_nvs_()
@@ -165,11 +183,11 @@ esp_err_t FlashMonotonicCounter::load_base_from_nvs_()
         return result;
     }
 
-    uint64_t base_value = 0;
-    result = nvs_get_u64(handle, nvs_base_key_.data(), &base_value);
+    int64_t base_value = 0;
+    result = nvs_get_i64(handle, nvs_base_key_.data(), &base_value);
     if (result == ESP_ERR_NVS_NOT_FOUND) {
         base_value = 0;
-        result = nvs_set_u64(handle, nvs_base_key_.data(), base_value);
+        result = nvs_set_i64(handle, nvs_base_key_.data(), base_value);
         if (result == ESP_OK) {
             result = nvs_commit(handle);
         }
@@ -210,7 +228,7 @@ esp_err_t FlashMonotonicCounter::load_rollover_pending_from_nvs_(bool *pending)
     return result;
 }
 
-esp_err_t FlashMonotonicCounter::save_rollover_state_to_nvs_(uint64_t base_value, bool pending) const
+esp_err_t FlashMonotonicCounter::save_rollover_state_to_nvs_(int64_t base_value, bool pending) const
 {
     nvs_handle_t handle = 0;
     esp_err_t result = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle);
@@ -218,7 +236,7 @@ esp_err_t FlashMonotonicCounter::save_rollover_state_to_nvs_(uint64_t base_value
         return result;
     }
 
-    result = nvs_set_u64(handle, nvs_base_key_.data(), base_value);
+    result = nvs_set_i64(handle, nvs_base_key_.data(), base_value);
     if (result == ESP_OK) {
         result = nvs_set_u8(handle, nvs_pending_key_.data(), pending ? 1 : 0);
     }
@@ -341,7 +359,7 @@ esp_err_t FlashMonotonicCounter::verify_written_bytes_(uint32_t start_byte, cons
 
 esp_err_t FlashMonotonicCounter::rollover_()
 {
-    const uint64_t new_base = base_value_ + used_bits_;
+    const int64_t new_base = signed_value_();
 
     esp_err_t result = save_rollover_state_to_nvs_(new_base, true);
     if (result != ESP_OK) {
