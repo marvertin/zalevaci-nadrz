@@ -64,11 +64,15 @@ static void publish_flow_to_outputs(const sensor_event_t &event)
 static void sensor_dispatch_task(void *pvParameters)
 {
     sensor_event_t event = {};
+    char debug_line[128];
 
     while (true) {
         if (!sensor_events_receive(&event, portMAX_DELAY)) {
             continue;
         }
+
+        sensor_event_to_string(&event, debug_line, sizeof(debug_line));
+        ESP_LOGI(TAG, "%s", debug_line);
 
         switch (event.type) {
             case SENSOR_EVENT_TEMPERATURE:

@@ -41,6 +41,7 @@ typedef struct {
 void sensor_events_init(size_t queue_length);
 bool sensor_events_publish(const sensor_event_t *event, TickType_t timeout);
 bool sensor_events_receive(sensor_event_t *event, TickType_t timeout);
+void sensor_event_to_string(const sensor_event_t *event, char *buffer, size_t buffer_len);
 
 #ifdef __cplusplus
 }
