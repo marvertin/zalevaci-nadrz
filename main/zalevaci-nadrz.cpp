@@ -18,6 +18,8 @@
 #include "hladina-demo.h"
 #include "app-config.h"
 #include "restart_info.h"
+#include "sensor_events.h"
+#include "sensor_dispatch.h"
 
 #include "lcd.h"
 #include "wifi_init.h"
@@ -64,8 +66,11 @@ void cpp_app_main(void)
     ESP_ERROR_CHECK(mqtt_init("mqtt://mqtt:1883"));
     
     lcd_init(); // Inicializace LCD před spuštěním ostatních demo úloh, aby mohly ihned zobrazovat informace
+
+    sensor_events_init(32);
+    sensor_dispatch_start();
     
-    // initialize flowmeter + display tasks
+    // initialize sensor producer tasks
     prutokomer_demo_init();
 
     // vytvoření paralelních tasků

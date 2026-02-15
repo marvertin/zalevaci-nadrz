@@ -8,6 +8,7 @@ extern "C" {
 #include <onewire.h>
 #include <esp_log.h>
 #include <esp_err.h>
+#include <esp_timer.h>
 #include <driver/gpio.h>
 
 #ifdef __cplusplus
@@ -15,8 +16,7 @@ extern "C" {
 #endif
 
 #include "pins.h"
-#include "lcd.h"
-#include "mqtt_init.h"
+#include "sensor_events.h"
 
 #define TAG "TEMP_DEMO"
 
@@ -108,31 +108,24 @@ static void temperature_task(void *pvParameters)
     gpio_set_pull_mode(SENSOR_GPIO, GPIO_PULLUP_ONLY);
     
     float temperature;
-    char buf[128];
-    char mqtt_topic[64];
-    
-    // Čekáme na MQTT připojení (timeout 30 sekund)
-    bool mqtt_connected = mqtt_wait_connected(30000);
-    if (!mqtt_connected) {
-        ESP_LOGW(TAG, "MQTT se nepodařilo připojit, teplota se nebude publikovat");
-    }
     
     while (1)
     {
         if (ds18b20_read_temperature(SENSOR_GPIO, &temperature)) {
             ESP_LOGI(TAG, "Teplota: %.2f °C", temperature);
-            
-            // Zobraz na LCD
-            snprintf(buf, sizeof(buf), "T: %4.1f °C", temperature);
-            lcd_print(8, 0, buf, true, 0);
-            
-            // Publikuj na MQTT, pokud je připojeno
-            if (mqtt_is_connected()) {
-                snprintf(buf, sizeof(buf), "%.2f", temperature);
-                snprintf(mqtt_topic, sizeof(mqtt_topic), "homeassistant/sensor/zalevaci_nadrz/temperature/state");
-                mqtt_publish(mqtt_topic, buf, true);
-            } else {
-                ESP_LOGW(TAG, "MQTT není připojeno, teplota se nebude publikovat");
+
+            sensor_event_t event = {
+                .type = SENSOR_EVENT_TEMPERATURE,
+                .timestamp_us = esp_timer_get_time(),
+                .data = {
+                    .temperature = {
+                        .temperature_c = temperature,
+                    },
+                },
+            };
+
+            if (!sensor_events_publish(&event, pdMS_TO_TICKS(50))) {
+                ESP_LOGW(TAG, "Fronta sensor eventu je plna, teplota zahozena");
             }
         } else {
             ESP_LOGE(TAG, "Nebylo možno přečíst teplotu");

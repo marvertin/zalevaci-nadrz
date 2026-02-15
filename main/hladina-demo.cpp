@@ -5,6 +5,7 @@ extern "C" {
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <esp_log.h>
+#include <esp_timer.h>
 #include <esp_adc/adc_oneshot.h>
 #include <driver/gpio.h>
 
@@ -12,9 +13,9 @@ extern "C" {
 }
 #endif
 
-#include "lcd.h"
 #include "trimmed_mean.hpp"
 #include "config_webapp.h"
+#include "sensor_events.h"
 
 #define TAG "LEVEL_DEMO"
 
@@ -223,10 +224,20 @@ static void level_task(void *pvParameters)
         // Výstup do logu
         //ESP_LOGI(TAG, "Surová hodnota: %lu | Výška hladiny: %.3f m", raw_value, height);
         
-        // Zobrazení na LCD
-        char buf[20];
-        snprintf(buf, sizeof(buf), "H:%3.0fcm", height * 100.0f);
-        lcd_print(0, 1, buf, true, 0); // Zobraz na druhý řádek, první sloupec
+        sensor_event_t event = {
+            .type = SENSOR_EVENT_LEVEL,
+            .timestamp_us = esp_timer_get_time(),
+            .data = {
+                .level = {
+                    .raw_value = raw_value,
+                    .height_m = height,
+                },
+            },
+        };
+
+        if (!sensor_events_publish(&event, pdMS_TO_TICKS(20))) {
+            ESP_LOGW(TAG, "Fronta sensor eventu je plna, hladina zahozena");
+        }
         
         // Čtení každou sekundu
         vTaskDelay(pdMS_TO_TICKS(20));

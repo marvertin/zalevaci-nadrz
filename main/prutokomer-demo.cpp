@@ -5,29 +5,20 @@ extern "C" {
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "esp_timer.h"
 #include "driver/gpio.h"
-#include "tm1637.h"
 
 #ifdef __cplusplus
 }
 #endif
 
 #include "pins.h"
-#include "lcd.h"
+#include "sensor_events.h"
 
 #define TAG "FLOW_DEMO"
 
 // sdílený counter z ISR
 static volatile uint32_t pulse_count = 0;
-
-// Configure pins
-static tm1637_config_t config = {
-    .clk_pin = GPIO_NUM_18,
-    .dio_pin = GPIO_NUM_19,
-    .bit_delay_us = 100
-};
-
-static tm1637_handle_t display;
 
 // ISR handler
 static void IRAM_ATTR flow_isr_handler(void *arg) {
@@ -36,23 +27,27 @@ static void IRAM_ATTR flow_isr_handler(void *arg) {
 
 static void pocitani_pulsu(void *pvParameters)
 {
-    char buf[8];
     while(1) {
         vTaskDelay(pdMS_TO_TICKS(200));   // měřím 1× za sekundu
 
-        // zobraz pulzy/seknu (zatím žádný přepočet na L/min)
-        snprintf(buf, sizeof(buf), "Q:%3lu", (unsigned long)pulse_count);
-        lcd_print(0, 0, buf, true, 0); // Zobraz na první řádek, první sloupec
+        sensor_event_t event = {
+            .type = SENSOR_EVENT_FLOW,
+            .timestamp_us = esp_timer_get_time(),
+            .data = {
+                .flow = {
+                    .pulse_count = pulse_count,
+                },
+            },
+        };
 
-        // zobraz pulzy/seknu (zatím žádný přepočet na L/min)
-        tm1637_show_number(display, pulse_count, false, 4, 0);
+        if (!sensor_events_publish(&event, pdMS_TO_TICKS(20))) {
+            ESP_LOGW(TAG, "Fronta sensor eventu je plna, prutok zahozen");
+        }
     }
 }
 
 void prutokomer_demo_init(void)
 {
-    tm1637_init(&config, &display);
-
     // --- Nastavení GPIO pro flow senzor ---
     gpio_config_t io_conf = {
         .pin_bit_mask = 1ULL << FLOW_GPIO,
