@@ -29,6 +29,12 @@ static config_webapp_restart_info_t s_restart_info = {
     .last_reason = ESP_RST_UNKNOWN,
     .last_restart_unix = 0,
 };
+static bool s_has_network_info = false;
+static config_webapp_network_info_t s_network_info = {
+    .is_ap_mode = false,
+    .active_ssid = nullptr,
+};
+static std::string s_network_ssid_storage;
 
 typedef struct {
     const config_item_t *items;
@@ -413,6 +419,15 @@ static std::string build_root_page_html()
     html += "</style></head><body>";
     html += "<h1>Systémový přehled</h1>";
 
+    if (s_has_network_info) {
+        html += "<div class='card'><h2>Síťový režim</h2><ul>";
+        html += "<li>Aktivní režim: <strong>" + std::string(s_network_info.is_ap_mode ? "AP (konfigurační hotspot)" : "STA (klient)") + "</strong></li>";
+        if (!s_network_ssid_storage.empty()) {
+            html += "<li>SSID: <strong>" + html_escape(s_network_ssid_storage) + "</strong></li>";
+        }
+        html += "</ul></div>";
+    }
+
     if (s_has_restart_info) {
         html += "<div class='card'><h2>Restarty</h2><ul>";
         html += "<li>Počet restartů: <strong>" + std::to_string(s_restart_info.boot_count) + "</strong></li>";
@@ -596,7 +611,8 @@ esp_err_t config_webapp_start(const char *nvs_namespace,
                               const config_group_t *groups,
                               size_t group_count,
                               uint16_t http_port,
-                              const config_webapp_restart_info_t *restart_info)
+                              const config_webapp_restart_info_t *restart_info,
+                              const config_webapp_network_info_t *network_info)
 {
     if (nvs_namespace == nullptr || groups == nullptr || group_count == 0) {
         return ESP_ERR_INVALID_ARG;
@@ -655,6 +671,18 @@ esp_err_t config_webapp_start(const char *nvs_namespace,
         s_restart_info = *restart_info;
     } else {
         memset(&s_restart_info, 0, sizeof(s_restart_info));
+    }
+
+    s_has_network_info = (network_info != nullptr);
+    s_network_ssid_storage.clear();
+    if (s_has_network_info) {
+        s_network_info = *network_info;
+        if (network_info->active_ssid != nullptr) {
+            s_network_ssid_storage = network_info->active_ssid;
+            s_network_info.active_ssid = s_network_ssid_storage.c_str();
+        }
+    } else {
+        memset(&s_network_info, 0, sizeof(s_network_info));
     }
 
     esp_err_t result = ensure_defaults_in_nvs();

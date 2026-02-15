@@ -2,6 +2,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_timer.h"
+#include "nvs_flash.h"
 #include "driver/gpio.h"
 #include "driver/i2c.h"
 #include "esp_rom_sys.h"
@@ -32,11 +33,28 @@ extern "C" {
 
 void cpp_app_main(void)
 {
-    // Inicializace WiFi
-    ESP_ERROR_CHECK(wifi_init_sta());
-    
-    // Čekáme na připojení (timeout 10 sekund)
-    wifi_wait_connected(10000);
+    esp_err_t nvs_result = nvs_flash_init();
+    if (nvs_result == ESP_ERR_NVS_NO_FREE_PAGES || nvs_result == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        nvs_result = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(nvs_result);
+
+    ESP_ERROR_CHECK(app_config_ensure_defaults());
+
+    char wifi_ssid[32] = {0};
+    char wifi_password[64] = {0};
+    ESP_ERROR_CHECK(app_config_load_wifi_credentials(wifi_ssid, sizeof(wifi_ssid), wifi_password, sizeof(wifi_password)));
+
+    bool config_ap_mode = (strlen(wifi_password) == 0);
+
+    if (config_ap_mode) {
+        ESP_LOGW("main", "WiFi heslo neni vyplnene, spoustim konfiguracni AP");
+        ESP_ERROR_CHECK(wifi_init_ap("zalevaci-config", ""));
+    } else {
+        ESP_ERROR_CHECK(wifi_init_sta(wifi_ssid, wifi_password));
+        wifi_wait_connected(10000);
+    }
 
     const config_group_t config_groups[] = {
         app_config_get_config_group(),
@@ -52,18 +70,25 @@ void cpp_app_main(void)
         .last_restart_unix = restart_info.last_restart_unix,
     };
 
+    config_webapp_network_info_t webapp_network_info = {
+        .is_ap_mode = config_ap_mode,
+        .active_ssid = config_ap_mode ? "zalevaci-config" : wifi_ssid,
+    };
+
     esp_err_t config_result = config_webapp_start(
         "app_cfg",
         config_groups,
         sizeof(config_groups) / sizeof(config_groups[0]),
         80,
-        &webapp_restart_info);
+        &webapp_restart_info,
+        &webapp_network_info);
     if (config_result != ESP_OK) {
         ESP_LOGW("main", "Config web app se nepodarilo spustit: %s", esp_err_to_name(config_result));
     }
     
-    // Inicializace MQTT - upravte URI podle vaší Home Assistant instance
-    ESP_ERROR_CHECK(mqtt_init("mqtt://mqtt:1883"));
+    if (!config_ap_mode) {
+        ESP_ERROR_CHECK(mqtt_init("mqtt://mqtt:1883"));
+    }
     
     lcd_init(); // Inicializace LCD před spuštěním ostatních demo úloh, aby mohly ihned zobrazovat informace
 

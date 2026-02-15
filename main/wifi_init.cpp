@@ -3,21 +3,12 @@
 #include "esp_event.h"
 #include "esp_log.h"
 #include "nvs_flash.h"
-#include "nvs.h"
 #include "esp_netif.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
 #include <string.h>
 
-// WiFi konfigurace - pokud jsou vyplněny, uloží se do flash a použijí se
-// Můžete je pak vymazat a budou se načítat z flash
-#define WIFI_SSID      ""  // Je ve Flashi když je prázdný, protože se načítá z NVS
-#define WIFI_PASSWORD  "" // Je ve Flashi když je prázdný, protože se načítá z NVS
 #define WIFI_MAX_RETRY 5
-
-#define NVS_NAMESPACE "wifi_config"
-#define NVS_SSID_KEY "ssid"
-#define NVS_PASS_KEY "password"
 
 static const char *TAG = "wifi";
 
@@ -27,72 +18,33 @@ static const char *TAG = "wifi";
 
 static EventGroupHandle_t s_wifi_event_group;
 static int s_retry_num = 0;
+static bool s_wifi_base_inited = false;
+static bool s_sta_handlers_registered = false;
 
-// Uložení WiFi credentials do NVS
-static esp_err_t save_wifi_credentials(const char* ssid, const char* password)
+static esp_err_t wifi_platform_init(void)
 {
-    nvs_handle_t nvs_handle;
-    esp_err_t ret;
+    if (s_wifi_base_inited) {
+        return ESP_OK;
+    }
 
-    ret = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &nvs_handle);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Chyba při otevírání NVS pro zápis");
+    esp_err_t ret = nvs_flash_init();
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        ret = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(ret);
+
+    ESP_ERROR_CHECK(esp_netif_init());
+
+    ret = esp_event_loop_create_default();
+    if (ret != ESP_OK && ret != ESP_ERR_INVALID_STATE) {
         return ret;
     }
 
-    ret = nvs_set_str(nvs_handle, NVS_SSID_KEY, ssid);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Chyba při ukládání SSID do NVS");
-        nvs_close(nvs_handle);
-        return ret;
-    }
+    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 
-    ret = nvs_set_str(nvs_handle, NVS_PASS_KEY, password);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Chyba při ukládání hesla do NVS");
-        nvs_close(nvs_handle);
-        return ret;
-    }
-
-    ret = nvs_commit(nvs_handle);
-    nvs_close(nvs_handle);
-
-    if (ret == ESP_OK) {
-        ESP_LOGI(TAG, "WiFi credentials uloženy do flash");
-    }
-    return ret;
-}
-
-// Načtení WiFi credentials z NVS
-static esp_err_t load_wifi_credentials(char* ssid, size_t ssid_len, char* password, size_t pass_len)
-{
-    nvs_handle_t nvs_handle;
-    esp_err_t ret;
-
-    ret = nvs_open(NVS_NAMESPACE, NVS_READONLY, &nvs_handle);
-    if (ret != ESP_OK) {
-        ESP_LOGW(TAG, "WiFi credentials nejsou v NVS");
-        return ret;
-    }
-
-    size_t required_size = ssid_len;
-    ret = nvs_get_str(nvs_handle, NVS_SSID_KEY, ssid, &required_size);
-    if (ret != ESP_OK) {
-        ESP_LOGW(TAG, "SSID není v NVS");
-        nvs_close(nvs_handle);
-        return ret;
-    }
-
-    required_size = pass_len;
-    ret = nvs_get_str(nvs_handle, NVS_PASS_KEY, password, &required_size);
-    if (ret != ESP_OK) {
-        ESP_LOGW(TAG, "Heslo není v NVS");
-        nvs_close(nvs_handle);
-        return ret;
-    }
-
-    nvs_close(nvs_handle);
-    ESP_LOGI(TAG, "WiFi credentials načteny z flash");
+    s_wifi_base_inited = true;
     return ESP_OK;
 }
 
@@ -119,66 +71,36 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
     }
 }
 
-esp_err_t wifi_init_sta(void)
+esp_err_t wifi_init_sta(const char *ssid, const char *password)
 {
-    esp_err_t ret;
-
-    // Inicializace NVS (nutné pro WiFi)
-    ret = nvs_flash_init();
-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        ESP_ERROR_CHECK(nvs_flash_erase());
-        ret = nvs_flash_init();
+    if (ssid == NULL || password == NULL || strlen(ssid) == 0) {
+        return ESP_ERR_INVALID_ARG;
     }
-    ESP_ERROR_CHECK(ret);
+
+    ESP_ERROR_CHECK(wifi_platform_init());
 
     // Vytvořit event group pro synchronizaci
-    s_wifi_event_group = xEventGroupCreate();
+    if (s_wifi_event_group == NULL) {
+        s_wifi_event_group = xEventGroupCreate();
+    }
+    xEventGroupClearBits(s_wifi_event_group, WIFI_CONNECTED_BIT | WIFI_FAIL_BIT);
 
-    // Inicializace TCP/IP stacku
-    ESP_ERROR_CHECK(esp_netif_init());
-
-    // Vytvořit výchozí event loop
-    ESP_ERROR_CHECK(esp_event_loop_create_default());
     esp_netif_create_default_wifi_sta();
 
-    // Inicializace WiFi s výchozí konfigurací
-    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
-
-    // Registrace event handlerů
-    esp_event_handler_instance_t instance_any_id;
-    esp_event_handler_instance_t instance_got_ip;
-    ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT,
-                                                        ESP_EVENT_ANY_ID,
-                                                        &wifi_event_handler,
-                                                        NULL,
-                                                        &instance_any_id));
-    ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT,
-                                                        IP_EVENT_STA_GOT_IP,
-                                                        &wifi_event_handler,
-                                                        NULL,
-                                                        &instance_got_ip));
-
-    // Konfigurace WiFi - načtení credentials
-    char ssid[32] = {0};
-    char password[64] = {0};
-
-    // Zkontroluj, jestli jsou definovány v kódu (a nejsou prázdné)
-    if (strlen(WIFI_SSID) > 0 && strlen(WIFI_PASSWORD) > 0) {
-        strncpy(ssid, WIFI_SSID, sizeof(ssid) - 1);
-        strncpy(password, WIFI_PASSWORD, sizeof(password) - 1);
-        ESP_LOGI(TAG, "Používám WiFi credentials z kódu");
-        
-        // Ulož do NVS pro příští použití
-        save_wifi_credentials(ssid, password);
-    } else {
-        // Pokus se načíst z NVS
-        ESP_LOGI(TAG, "WiFi credentials nejsou v kódu, načítám z flash");
-        ret = load_wifi_credentials(ssid, sizeof(ssid), password, sizeof(password));
-        if (ret != ESP_OK) {
-            ESP_LOGE(TAG, "Nelze načíst WiFi credentials! Definujte WIFI_SSID a WIFI_PASSWORD v kódu.");
-            return ESP_FAIL;
-        }
+    if (!s_sta_handlers_registered) {
+        esp_event_handler_instance_t instance_any_id;
+        esp_event_handler_instance_t instance_got_ip;
+        ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT,
+                                                            ESP_EVENT_ANY_ID,
+                                                            &wifi_event_handler,
+                                                            NULL,
+                                                            &instance_any_id));
+        ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT,
+                                                            IP_EVENT_STA_GOT_IP,
+                                                            &wifi_event_handler,
+                                                            NULL,
+                                                            &instance_got_ip));
+        s_sta_handlers_registered = true;
     }
 
     wifi_config_t wifi_config = {};
@@ -193,6 +115,43 @@ esp_err_t wifi_init_sta(void)
     ESP_ERROR_CHECK(esp_wifi_start());
 
     ESP_LOGI(TAG, "WiFi inicializace dokončena. Připojuji se k SSID:%s", ssid);
+
+    return ESP_OK;
+}
+
+esp_err_t wifi_init_ap(const char *ap_ssid, const char *ap_password)
+{
+    if (ap_ssid == NULL || strlen(ap_ssid) == 0) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    ESP_ERROR_CHECK(wifi_platform_init());
+    esp_netif_create_default_wifi_ap();
+
+    wifi_config_t wifi_config = {};
+    strncpy((char *)wifi_config.ap.ssid, ap_ssid, sizeof(wifi_config.ap.ssid) - 1);
+    wifi_config.ap.ssid_len = strlen(ap_ssid);
+    wifi_config.ap.channel = 1;
+    wifi_config.ap.max_connection = 4;
+
+    if (ap_password != NULL && strlen(ap_password) > 0) {
+        strncpy((char *)wifi_config.ap.password, ap_password, sizeof(wifi_config.ap.password) - 1);
+        wifi_config.ap.authmode = WIFI_AUTH_WPA2_PSK;
+    } else {
+        wifi_config.ap.authmode = WIFI_AUTH_OPEN;
+    }
+
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
+    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wifi_config));
+    ESP_ERROR_CHECK(esp_wifi_start());
+
+    esp_netif_t *ap_netif = esp_netif_get_handle_from_ifkey("WIFI_AP_DEF");
+    if (ap_netif != NULL) {
+        esp_netif_ip_info_t ip_info = {};
+        if (esp_netif_get_ip_info(ap_netif, &ip_info) == ESP_OK) {
+            ESP_LOGI(TAG, "AP mode: SSID=%s, IP=" IPSTR, ap_ssid, IP2STR(&ip_info.ip));
+        }
+    }
 
     return ESP_OK;
 }

@@ -10,11 +10,20 @@ extern "C" {
 #endif
 
 /**
- * @brief Inicializuje WiFi a připojí se k síti
+ * @brief Inicializuje WiFi stanici a připojí se k síti
  * 
  * @return ESP_OK při úspěchu, jinak chybový kód
  */
-esp_err_t wifi_init_sta(void);
+esp_err_t wifi_init_sta(const char *ssid, const char *password);
+
+/**
+ * @brief Inicializuje WiFi access point pro konfiguraci
+ *
+ * @param ap_ssid SSID access pointu
+ * @param ap_password Heslo AP (prázdný řetězec = open AP)
+ * @return ESP_OK při úspěchu, jinak chybový kód
+ */
+esp_err_t wifi_init_ap(const char *ap_ssid, const char *ap_password);
 
 /**
  * @brief Čeká na připojení k WiFi
