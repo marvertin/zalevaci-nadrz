@@ -20,7 +20,7 @@
 #include "app-config.h"
 #include "restart_info.h"
 #include "sensor_events.h"
-#include "sensor_dispatch.h"
+#include "state_manager.h"
 
 #include "lcd.h"
 #include "wifi_init.h"
@@ -132,7 +132,7 @@ void cpp_app_main(void)
     lcd_init(); // Inicializace LCD před spuštěním ostatních demo úloh, aby mohly ihned zobrazovat informace
 
     sensor_events_init(32);
-    sensor_dispatch_start();
+    state_manager_start();
     
     // initialize sensor producer tasks
     prutokomer_init();

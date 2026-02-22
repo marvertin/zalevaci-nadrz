@@ -14,13 +14,13 @@ extern "C" {
 
 #include <stdio.h>
 
-#include "sensor_dispatch.h"
+#include "state_manager.h"
 #include "sensor_events.h"
 #include "lcd.h"
 #include "mqtt_init.h"
 #include "pins.h"
 
-static const char *TAG = "SENSOR_DISPATCH";
+static const char *TAG = "STATE_MANAGER";
 
 static tm1637_config_t s_tm1637_config = {
     .clk_pin = GPIO_NUM_18,
@@ -65,9 +65,9 @@ static void publish_flow_to_outputs(const sensor_event_t &event)
     }
 }
 
-static void sensor_dispatch_task(void *pvParameters)
+static void state_manager_task(void *pvParameters)
 {
-    sensor_event_t event = {};
+    app_event_t event = {};
     char debug_line[128];
 
     while (true) {
@@ -78,25 +78,38 @@ static void sensor_dispatch_task(void *pvParameters)
         sensor_event_to_string(&event, debug_line, sizeof(debug_line));
         ESP_LOGD(TAG, "%s", debug_line);
 
-        switch (event.type) {
-            case SENSOR_EVENT_TEMPERATURE:
-                publish_temperature_to_outputs(event);
+        switch (event.event_type) {
+            case EVT_SENSOR:
+                switch (event.data.sensor.sensor_type) {
+                    case SENSOR_EVENT_TEMPERATURE:
+                        publish_temperature_to_outputs(event.data.sensor);
+                        break;
+                    case SENSOR_EVENT_LEVEL:
+                        publish_level_to_outputs(event.data.sensor);
+                        break;
+                    case SENSOR_EVENT_FLOW:
+                        publish_flow_to_outputs(event.data.sensor);
+                        break;
+                    default:
+                        ESP_LOGW(TAG, "Neznamy sensor event: %d", (int)event.data.sensor.sensor_type);
+                        break;
+                }
                 break;
-            case SENSOR_EVENT_LEVEL:
-                publish_level_to_outputs(event);
+            case EVT_NETWORK:
+                ESP_LOGD(TAG, "Network event zatim neni implementovany");
                 break;
-            case SENSOR_EVENT_FLOW:
-                publish_flow_to_outputs(event);
+            case EVT_TICK:
+                ESP_LOGD(TAG, "Tick event zatim neni implementovany");
                 break;
             default:
-                ESP_LOGW(TAG, "Neznamy sensor event: %d", (int)event.type);
+                ESP_LOGW(TAG, "Neznamy event_type: %d", (int)event.event_type);
                 break;
         }
     }
 }
 
-void sensor_dispatch_start(void)
+void state_manager_start(void)
 {
     tm1637_init(&s_tm1637_config, &s_tm1637_display);
-    xTaskCreate(sensor_dispatch_task, TAG, configMINIMAL_STACK_SIZE * 5, NULL, 4, NULL);
+    xTaskCreate(state_manager_task, TAG, configMINIMAL_STACK_SIZE * 5, NULL, 4, NULL);
 }

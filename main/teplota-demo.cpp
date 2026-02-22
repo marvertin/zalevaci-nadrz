@@ -114,12 +114,17 @@ static void temperature_task(void *pvParameters)
         if (ds18b20_read_temperature(SENSOR_GPIO, &temperature)) {
             ESP_LOGI(TAG, "Teplota: %.2f °C", temperature);
 
-            sensor_event_t event = {
-                .type = SENSOR_EVENT_TEMPERATURE,
+            app_event_t event = {
+                .event_type = EVT_SENSOR,
                 .timestamp_us = esp_timer_get_time(),
                 .data = {
-                    .temperature = {
-                        .temperature_c = temperature,
+                    .sensor = {
+                        .sensor_type = SENSOR_EVENT_TEMPERATURE,
+                        .data = {
+                            .temperature = {
+                                .temperature_c = temperature,
+                            },
+                        },
                     },
                 },
             };

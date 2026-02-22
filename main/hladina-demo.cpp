@@ -224,13 +224,18 @@ static void level_task(void *pvParameters)
         // Výstup do logu
         //ESP_LOGI(TAG, "Surová hodnota: %lu | Výška hladiny: %.3f m", raw_value, height);
         
-        sensor_event_t event = {
-            .type = SENSOR_EVENT_LEVEL,
+        app_event_t event = {
+            .event_type = EVT_SENSOR,
             .timestamp_us = esp_timer_get_time(),
             .data = {
-                .level = {
-                    .raw_value = raw_value,
-                    .height_m = height,
+                .sensor = {
+                    .sensor_type = SENSOR_EVENT_LEVEL,
+                    .data = {
+                        .level = {
+                            .raw_value = raw_value,
+                            .height_m = height,
+                        },
+                    },
                 },
             },
         };

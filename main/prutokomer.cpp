@@ -100,13 +100,18 @@ static void pocitani_pulsu(void *pvParameters)
                      total_volume_l);
         }
 
-        sensor_event_t event = {
-            .type = SENSOR_EVENT_FLOW,
+        app_event_t event = {
+            .event_type = EVT_SENSOR,
             .timestamp_us = esp_timer_get_time(),
             .data = {
-                .flow = {
-                    .flow_l_min = s_flow_l_min_ema,
-                    .total_volume_l = total_volume_l,
+                .sensor = {
+                    .sensor_type = SENSOR_EVENT_FLOW,
+                    .data = {
+                        .flow = {
+                            .flow_l_min = s_flow_l_min_ema,
+                            .total_volume_l = total_volume_l,
+                        },
+                    },
                 },
             },
         };
