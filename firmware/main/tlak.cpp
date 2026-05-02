@@ -40,6 +40,7 @@ static constexpr float PRESSURE_MAX_BAR_LIMIT = 16.0f;
 static constexpr int32_t PRESSURE_MIN_ROUND_DECIMALS = 1;
 static constexpr int32_t PRESSURE_MAX_ROUND_DECIMALS = 3;
 static constexpr int64_t PRESSURE_CFG_DEBUG_PERIOD_US = 10LL * 1000LL * 1000LL;
+static constexpr int64_t PRESSURE_INVALID_RAW_WARN_PERIOD_US = 60LL * 1000LL * 1000LL;
 static constexpr int32_t PRESSURE_RAW_SANITY_MIN = 0;
 static constexpr int32_t PRESSURE_RAW_SANITY_MAX = 32767;
 static constexpr int32_t PRESSURE_RAW_SANITY_MIN_MARGIN = 80;
@@ -134,6 +135,8 @@ static DirectionalHysteresis s_pressure_hysteresis_before(PRESSURE_DEFAULT_HYST_
 static DirectionalHysteresis s_pressure_hysteresis_after(PRESSURE_DEFAULT_HYST_BAR);
 
 static int64_t s_last_cfg_debug_publish_us = 0;
+static int64_t s_last_invalid_raw_warn_us = 0;
+static uint32_t s_invalid_raw_suppressed = 0;
 
 typedef struct {
     const char *name;
@@ -304,7 +307,19 @@ static bool pressure_raw_is_plausible(int32_t raw_value)
 static bool ads1115_pressure_raw_is_valid(int32_t raw_value, const char *sensor_name)
 {
     if (raw_value < PRESSURE_RAW_SANITY_MIN || raw_value > PRESSURE_RAW_SANITY_MAX) {
-        ESP_LOGW(TAG, "ADS1115 vratil nesmyslnou RAW hodnotu tlaku %s: %ld", sensor_name, (long)raw_value);
+        const int64_t now_us = esp_timer_get_time();
+        if (s_last_invalid_raw_warn_us == 0
+            || (now_us - s_last_invalid_raw_warn_us) >= PRESSURE_INVALID_RAW_WARN_PERIOD_US) {
+            ESP_LOGW(TAG,
+                     "ADS1115 vratil nesmyslnou RAW hodnotu tlaku %s: %ld, potlaceno=%lu",
+                     sensor_name,
+                     (long)raw_value,
+                     (unsigned long)s_invalid_raw_suppressed);
+            s_last_invalid_raw_warn_us = now_us;
+            s_invalid_raw_suppressed = 0;
+        } else {
+            ++s_invalid_raw_suppressed;
+        }
         return false;
     }
 

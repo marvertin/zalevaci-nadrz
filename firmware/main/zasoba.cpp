@@ -50,6 +50,7 @@ static constexpr float LEVEL_MAX_HYST_M = 0.05f;
 static constexpr int32_t LEVEL_MIN_ROUND_DECIMALS = 1;
 static constexpr int32_t LEVEL_MAX_ROUND_DECIMALS = 3;
 static constexpr int64_t LEVEL_CFG_DEBUG_PERIOD_US = 10LL * 1000LL * 1000LL;
+static constexpr int64_t LEVEL_INVALID_RAW_WARN_PERIOD_US = 60LL * 1000LL * 1000LL;
 static constexpr int32_t LEVEL_RAW_SANITY_MIN = 0;
 static constexpr int32_t LEVEL_RAW_SANITY_MAX = 32767;
 static constexpr int32_t LEVEL_RAW_SANITY_MIN_MARGIN = 80;
@@ -137,6 +138,8 @@ static bool s_height_ema_initialized = false;
 static DirectionalHysteresis s_height_hysteresis(LEVEL_DEFAULT_HYST_M);
 static int64_t s_last_hysteresis_debug_log_us = 0;
 static int64_t s_last_cfg_debug_publish_us = 0;
+static int64_t s_last_invalid_raw_warn_us = 0;
+static uint32_t s_invalid_raw_suppressed = 0;
 static constexpr int64_t LEVEL_HYST_DEBUG_PERIOD_US = 2LL * 1000LL * 1000LL;
 
 static void publish_config_debug(void)
@@ -223,7 +226,18 @@ static bool ads1115_level_sample_to_raw(const ads1115_level_sample_t &sample, in
     const int32_t raw = sample.level_raw;
 
     if (raw < LEVEL_RAW_SANITY_MIN || raw > LEVEL_RAW_SANITY_MAX) {
-        ESP_LOGW(TAG, "ADS1115 vratil nesmyslnou RAW hladinu: %ld", (long)raw);
+        const int64_t now_us = esp_timer_get_time();
+        if (s_last_invalid_raw_warn_us == 0
+            || (now_us - s_last_invalid_raw_warn_us) >= LEVEL_INVALID_RAW_WARN_PERIOD_US) {
+            ESP_LOGW(TAG,
+                     "ADS1115 vratil nesmyslnou RAW hladinu: %ld, potlaceno=%lu",
+                     (long)raw,
+                     (unsigned long)s_invalid_raw_suppressed);
+            s_last_invalid_raw_warn_us = now_us;
+            s_invalid_raw_suppressed = 0;
+        } else {
+            ++s_invalid_raw_suppressed;
+        }
         return false;
     }
 
