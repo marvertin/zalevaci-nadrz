@@ -45,7 +45,7 @@ extern "C" {
 
 static const char *TAG = "voda_septik";
 static constexpr uint32_t TASK_WDT_TIMEOUT_MS = 5000;
-static constexpr bool MQTT_BENCH_MODE = false;
+static constexpr bool MQTT_BENCH_MODE = true;
 static constexpr const char *MQTT_BENCH_URI = "mqtt://amur.veve:1884";
 static constexpr const char *MQTT_BENCH_USERNAME = "";
 static constexpr const char *MQTT_BENCH_PASSWORD = "";
