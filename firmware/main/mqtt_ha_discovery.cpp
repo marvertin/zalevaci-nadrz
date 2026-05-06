@@ -20,7 +20,6 @@ static constexpr const char *DEVICE_ID = "voda_septik_esp32";
 static constexpr const char *DEVICE_NAME = "Voda Septik";
 static constexpr const char *DEVICE_MODEL = "ESP32 voda-septik";
 static constexpr const char *DEVICE_MANUFACTURER = "voda-septik";
-static constexpr uint32_t FLOW_RATE_EXPIRE_AFTER_SEC = 30;
 
 struct ha_entity_meta_t {
     const char *component;
@@ -54,15 +53,15 @@ static ha_topic_name_cfg_t s_ha_topic_name_cfg[(size_t)mqtt_topic_id_t::COUNT] =
     {mqtt_topic_id_t::TOPIC_STAV_ROZDIL_TLAKU_FILTRU, "Rozdil tlaku filtru", {0}, false},
     {mqtt_topic_id_t::TOPIC_STAV_ZANESENOST_FILTRU_PERCENT, "Zanesenost filtru", {0}, false},
     {mqtt_topic_id_t::TOPIC_STAV_CERPANI_PUMPA_STAV, "Pumpa stav", {0}, false},
-    {mqtt_topic_id_t::TOPIC_ELEKTRO_CERPADLO_NAPETI_V, "Elektro cerpadlo napeti", {0}, false},
-    {mqtt_topic_id_t::TOPIC_ELEKTRO_CERPADLO_PROUD_A, "Elektro cerpadlo proud", {0}, false},
-    {mqtt_topic_id_t::TOPIC_ELEKTRO_CERPADLO_VYKON_CINNY_W, "Elektro cerpadlo vykon cinny", {0}, false},
-    {mqtt_topic_id_t::TOPIC_ELEKTRO_CERPADLO_VYKON_JALOVY_VAR, "Elektro cerpadlo vykon jalovy", {0}, false},
-    {mqtt_topic_id_t::TOPIC_ELEKTRO_CERPADLO_VYKON_ZDANLIVY_VA, "Elektro cerpadlo vykon zdanlivy", {0}, false},
-    {mqtt_topic_id_t::TOPIC_ELEKTRO_CERPADLO_FREKVENCE_HZ, "Elektro cerpadlo frekvence", {0}, false},
-    {mqtt_topic_id_t::TOPIC_ELEKTRO_CERPADLO_COSFI, "Elektro cerpadlo cosfi", {0}, false},
-    {mqtt_topic_id_t::TOPIC_ELEKTRO_CERPADLO_ENERGIE_CINNA_KWH, "Elektro cerpadlo energie cinna", {0}, false},
-    {mqtt_topic_id_t::TOPIC_ELEKTRO_CERPADLO_ENERGIE_JALOVA_KVARH, "Elektro cerpadlo energie jalova", {0}, false},
+    {mqtt_topic_id_t::TOPIC_ELEKTRO_CERPADLO_NAPETI_V, "Napeti", {0}, false},
+    {mqtt_topic_id_t::TOPIC_ELEKTRO_CERPADLO_PROUD_A, "Proud", {0}, false},
+    {mqtt_topic_id_t::TOPIC_ELEKTRO_CERPADLO_VYKON_CINNY_W, "Vykon cinny", {0}, false},
+    {mqtt_topic_id_t::TOPIC_ELEKTRO_CERPADLO_VYKON_JALOVY_VAR, "Vykon jalovy", {0}, false},
+    {mqtt_topic_id_t::TOPIC_ELEKTRO_CERPADLO_VYKON_ZDANLIVY_VA, "Vykon zdanlivy", {0}, false},
+    {mqtt_topic_id_t::TOPIC_ELEKTRO_CERPADLO_FREKVENCE_HZ, "Frekvence", {0}, false},
+    {mqtt_topic_id_t::TOPIC_ELEKTRO_CERPADLO_COSFI, "Cosfi", {0}, false},
+    {mqtt_topic_id_t::TOPIC_ELEKTRO_CERPADLO_ENERGIE_CINNA_KWH, "Energie cinna", {0}, false},
+    {mqtt_topic_id_t::TOPIC_ELEKTRO_CERPADLO_ENERGIE_JALOVA_KVARH, "Energie jalova", {0}, false},
     {mqtt_topic_id_t::TOPIC_SYSTEM_STATUS, "Stav zarizeni", {0}, false},
     {mqtt_topic_id_t::TOPIC_SYSTEM_BOOT_MODE, "Boot mode", {0}, false},
     {mqtt_topic_id_t::TOPIC_SYSTEM_OTA_EVENT, "OTA event", {0}, false},
@@ -511,20 +510,6 @@ static esp_err_t publish_discovery_for_topic(const mqtt_topic_descriptor_t &topi
                                true) ||
             !append_json_field(payload, sizeof(payload), &offset, &first, "payload_available", "online", true) ||
             !append_json_field(payload, sizeof(payload), &offset, &first, "payload_not_available", "offline", true)) {
-            return ESP_ERR_NO_MEM;
-        }
-    }
-
-    if (topic.id == mqtt_topic_id_t::TOPIC_STAV_CERPANI_PRUTOK) {
-        char expire_after_value[16] = {0};
-        snprintf(expire_after_value, sizeof(expire_after_value), "%lu", (unsigned long)FLOW_RATE_EXPIRE_AFTER_SEC);
-        if (!append_json_field(payload,
-                               sizeof(payload),
-                               &offset,
-                               &first,
-                               "expire_after",
-                               expire_after_value,
-                               false)) {
             return ESP_ERR_NO_MEM;
         }
     }
